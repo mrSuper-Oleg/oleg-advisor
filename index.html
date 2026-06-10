@@ -1276,8 +1276,9 @@
     quiz.addEventListener('click', e => { if (e.target === quiz) closeQuiz(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') closeQuiz(); });
 
-    // ── Отправка формы: заявка уходит сообщением в Telegram ──
-    document.getElementById('f-submit').addEventListener('click', function () {
+    // ── Отправка формы: лид в Битрикс24, fallback — Telegram ──
+    const B24_HOOK = 'https://b24-idqi3a.bitrix24.ru/rest/1/q6inuzgvilixr6r5/';
+    document.getElementById('f-submit').addEventListener('click', async function () {
       const name = document.getElementById('f-name').value.trim();
       const contact = document.getElementById('f-contact').value.trim();
       const format = fmtSelect.selectedIndex > 0 ? fmtSelect.options[fmtSelect.selectedIndex].text : 'не выбран';
@@ -1288,10 +1289,42 @@
         return;
       }
       err.style.display = 'none';
-      const msg = 'Заявка с сайта\n\nИмя: ' + name + '\nКонтакт: ' + contact + '\nФормат: ' + format;
-      window.open('https://t.me/mrSuperOleg?text=' + encodeURIComponent(msg), '_blank');
-      this.textContent = 'Заявка сформирована ✓ — отправьте её в Telegram';
-      this.style.background = '#16a34a';
+      const btn = this;
+      btn.disabled = true;
+      btn.textContent = 'Отправляем…';
+
+      const fields = {
+        TITLE: 'Заявка с сайта — ' + name,
+        NAME: name,
+        SOURCE_ID: 'WEB',
+        SOURCE_DESCRIPTION: 'Лендинг, форма заявки',
+        COMMENTS: 'Контакт: ' + contact + '\nИнтересующий формат: ' + format
+      };
+      if (/^[+\d][\d\s()-]{6,}$/.test(contact)) {
+        fields.PHONE = [{ VALUE: contact, VALUE_TYPE: 'WORK' }];
+      }
+
+      try {
+        const resp = await fetch(B24_HOOK + 'crm.lead.add.json', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: fields })
+        });
+        const data = await resp.json();
+        if (data.result) {
+          btn.textContent = 'Заявка отправлена ✓';
+          btn.style.background = '#16a34a';
+          return;
+        }
+        throw new Error(data.error_description || 'B24 error');
+      } catch (e) {
+        // Fallback: формируем заявку сообщением в Telegram
+        const msg = 'Заявка с сайта\n\nИмя: ' + name + '\nКонтакт: ' + contact + '\nФормат: ' + format;
+        window.open('https://t.me/mrSuperOleg?text=' + encodeURIComponent(msg), '_blank');
+        btn.disabled = false;
+        btn.textContent = 'Заявка сформирована ✓ — отправьте её в Telegram';
+        btn.style.background = '#16a34a';
+      }
     });
   </script>
 
